@@ -26,7 +26,7 @@ export default function NewBatchPage() {
   const [results, setResults] = useState<UploadFileResult[] | null>(null)
   const [progress, setProgress] = useState(0)
 
-  const onDrop = useCallback((accepted: File[], rejected: File[]) => {
+  const onDrop = useCallback((accepted: File[], rejected: any[]) => {
     if (rejected.length > 0) {
       toast.error(`${rejected.length} file(s) rejected — only PDF, JPG, PNG allowed`)
     }

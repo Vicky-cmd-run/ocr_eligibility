@@ -13,7 +13,7 @@ from app.core.ocr_engine import OcrToken
 logger = logging.getLogger(__name__)
 
 # How much vertical overlap (in pixels/units) tokens need to be "on the same row"
-ROW_Y_TOLERANCE = 15.0
+ROW_Y_TOLERANCE = 35.0
 
 # Patterns for detecting numeric mark values
 NUMERIC_PATTERN = re.compile(r"^\d{1,3}(\.\d{1,2})?$")
@@ -200,45 +200,66 @@ def _assign_obtained_maximum(
 ) -> None:
     """
     Assign obtained and maximum marks from numeric tokens in the row.
-    Strategy:
-    1. If header column roles were detected, assign by x proximity.
-    2. Otherwise, use heuristics: first numeric = obtained, second = maximum.
-    3. For rows with only one numeric → likely obtained only.
+    Filters out subject codes and identifies splits totals with 100 marks fallback.
     """
-    num_tokens = sorted(row.mark_tokens, key=lambda t: t.x_min)
+    # 1. Filter out subject codes (numeric tokens to the left of the subject name)
+    subj_x = row.subject_token.x_min
+    num_tokens = [t for t in row.mark_tokens if t.x_min > subj_x]
+    num_tokens = sorted(num_tokens, key=lambda t: t.x_min)
+    
+    if not num_tokens:
+        return
+        
+    vals = []
+    for t in num_tokens:
+        val = clean_numeric(t.text)
+        if val is not None:
+            vals.append((val, t))
+            
+    if not vals:
+        return
 
-    if column_roles["obtained_x"] is not None and column_roles["maximum_x"] is not None:
-        obtained_x = column_roles["obtained_x"]
-        maximum_x = column_roles["maximum_x"]
+    # If we only have 1 numeric token, it is obtained marks, max is 100
+    if len(vals) == 1:
+        row.obtained_text = vals[0][1].text
+        row.obtained_confidence = vals[0][1].confidence
+        row.maximum_text = "100"
+        row.maximum_confidence = 1.0
+        return
 
-        def dist(t: OcrToken, x: float) -> float:
-            return abs((t.x_min + t.x_max) / 2 - x)
+    # If we have 3 numeric tokens: check if 3rd is the sum of 1st and 2nd (Theory + Practical = Total)
+    if len(vals) == 3:
+        v1, t1 = vals[0]
+        v2, t2 = vals[1]
+        v3, t3 = vals[2]
+        if abs((v1 + v2) - v3) <= 2:
+            row.obtained_text = t3.text
+            row.obtained_confidence = t3.confidence
+            row.maximum_text = "100"
+            row.maximum_confidence = 1.0
+            return
 
-        if num_tokens:
-            obtained_token = min(num_tokens, key=lambda t: dist(t, obtained_x))
-            row.obtained_text = obtained_token.text
-            row.obtained_confidence = obtained_token.confidence
+    # If we have 2 numeric tokens (e.g., Obtained and Maximum, or Split and Total)
+    if len(vals) == 2:
+        v1, t1 = vals[0]
+        v2, t2 = vals[1]
+        
+        # If the second value is a common max mark or larger than first
+        if v2 in (100, 50, 200, 150, 75, 80, 90) or v2 > v1:
+            row.obtained_text = t1.text
+            row.obtained_confidence = t1.confidence
+            row.maximum_text = t2.text
+            row.maximum_confidence = t2.confidence
+        else:
+            row.obtained_text = t2.text
+            row.obtained_confidence = t2.confidence
+            row.maximum_text = "100"
+            row.maximum_confidence = 1.0
+        return
 
-            remaining = [t for t in num_tokens if t is not obtained_token]
-            if remaining:
-                max_token = min(remaining, key=lambda t: dist(t, maximum_x))
-                row.maximum_text = max_token.text
-                row.maximum_confidence = max_token.confidence
-    else:
-        # Heuristic: if we have 2+ numerics, first = obtained, last = maximum
-        # (many marksheets have: obtained | grade | maximum)
-        if len(num_tokens) >= 2:
-            row.obtained_text = num_tokens[0].text
-            row.obtained_confidence = num_tokens[0].confidence
-            # Look for the largest numeric as maximum
-            valid_nums = [(clean_numeric(t.text), t) for t in num_tokens]
-            valid_nums = [(v, t) for v, t in valid_nums if v is not None]
-            if valid_nums:
-                max_val, max_token = max(valid_nums, key=lambda x: x[0])
-                obtained_val = clean_numeric(row.obtained_text)
-                if obtained_val is not None and max_val >= obtained_val:
-                    row.maximum_text = max_token.text
-                    row.maximum_confidence = max_token.confidence
-        elif len(num_tokens) == 1:
-            row.obtained_text = num_tokens[0].text
-            row.obtained_confidence = num_tokens[0].confidence
+    # Fallback default: pick the largest value as obtained, max is 100
+    max_val, max_token = max(vals, key=lambda x: x[0])
+    row.obtained_text = max_token.text
+    row.obtained_confidence = max_token.confidence
+    row.maximum_text = "100"
+    row.maximum_confidence = 1.0

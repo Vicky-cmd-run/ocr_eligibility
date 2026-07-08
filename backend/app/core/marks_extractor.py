@@ -18,6 +18,7 @@ NAME_PATTERNS = [
     re.compile(r"(?:candidate\s*(?:name|:)\s*)(.+)", re.IGNORECASE),
     re.compile(r"(?:name\s*(?:of\s*candidate|:)\s*)(.+)", re.IGNORECASE),
     re.compile(r"(?:student\s*name\s*[:\-]\s*)(.+)", re.IGNORECASE),
+    re.compile(r"(?:this\s*is\s*to\s*certify\s*that\s*)\s*([A-Z\s\.\n\r]+?)(?=\s*(?:\d|son|daughter|roll|mother|father|\n\n|\r\r|$))", re.IGNORECASE),
 ]
 REG_PATTERNS = [
     re.compile(r"(?:application\s*(?:no|number|#|:)\s*)([A-Z0-9\-/]+)", re.IGNORECASE),
@@ -104,7 +105,8 @@ def _extract_candidate_name(tokens: List[OcrToken]) -> tuple[Optional[str], Opti
     for pattern in NAME_PATTERNS:
         m = pattern.search(full_text)
         if m:
-            name = m.group(1).strip()
+            raw_val = m.group(1).replace("\n", " ").strip()
+            name = re.sub(r"\s+", " ", raw_val)
             if 2 <= len(name) <= 100:
                 return name, m.group(0).strip()
     return None, None

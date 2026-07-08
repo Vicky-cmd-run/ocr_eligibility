@@ -79,7 +79,7 @@ export default function ReviewPage() {
       <div className="review-layout">
         {/* Left: Document preview */}
         <div className="review-preview">
-          {doc.mime_type === 'application/pdf' || doc.document_type?.startsWith('PDF') ? (
+          {doc.original_filename?.toLowerCase().endsWith('.pdf') || doc.document_type?.toLowerCase().includes('pdf') ? (
             <object data={filePreviewUrl} type="application/pdf" style={{ width: '100%', height: '100%', minHeight: '600px' }}>
               <p style={{ padding: 20, color: 'var(--text-muted)' }}>PDF preview not available. <a href={filePreviewUrl} target="_blank" rel="noreferrer">Open file</a></p>
             </object>
@@ -97,7 +97,7 @@ export default function ReviewPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               {[
                 { label: 'Combined Confidence', value: fmtConf(er?.combined_confidence) },
-                { label: 'OCR Confidence', value: fmtConf(er?.ocr_confidence) },
+                { label: 'OCR Confidence', value: fmtConf(doc.overall_ocr_confidence) },
               ].map(item => (
                 <div key={item.label}>
                   <div className="review-field">

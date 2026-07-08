@@ -30,6 +30,7 @@ export default function MainScreen() {
   })
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [approvalMode, setApprovalMode] = useState<'auto' | 'manual'>('auto')
 
   // Fetch past batches list
   const { data: batches = [], refetch: refetchBatches } = useQuery({
@@ -77,7 +78,7 @@ export default function MainScreen() {
     }
   }, [batches, selectedBatchId])
 
-  const onDrop = useCallback(async (accepted: File[], rejected: File[]) => {
+  const onDrop = useCallback(async (accepted: File[], rejected: any[]) => {
     if (rejected.length > 0) {
       toast.error(`${rejected.length} file(s) rejected — only PDF, JPG, PNG, ZIP allowed`)
     }
@@ -201,17 +202,45 @@ export default function MainScreen() {
               </p>
             </div>
 
-            {/* Download Spreadsheet Button */}
-            {docs.length > 0 && (
-              <a
-                href={exportXlsx(selectedBatchId)}
-                className="btn btn-primary btn-sm"
-                download
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-              >
-                <FileSpreadsheet size={15} /> Download Excel
-              </a>
-            )}
+            {/* Action buttons (Toggle + Download Excel) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {/* Approval Mode Toggle */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'var(--bg-secondary)', padding: '4px 10px', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>Approval:</span>
+                <button
+                  type="button"
+                  onClick={() => setApprovalMode(approvalMode === 'auto' ? 'manual' : 'auto')}
+                  className="btn"
+                  style={{
+                    borderRadius: '12px',
+                    padding: '2px 8px',
+                    fontSize: '11px',
+                    margin: 0,
+                    height: 'auto',
+                    background: approvalMode === 'auto' ? 'var(--btn-primary-bg)' : 'var(--btn-secondary-bg)',
+                    color: approvalMode === 'auto' ? 'var(--btn-primary-text)' : 'var(--btn-secondary-text)',
+                    border: 'none',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    boxShadow: 'none',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {approvalMode === 'auto' ? '⚡ Auto' : '👤 Manual'}
+                </button>
+              </div>
+
+              {docs.length > 0 && (
+                <a
+                  href={exportXlsx(selectedBatchId, undefined, approvalMode)}
+                  className="btn btn-primary btn-sm"
+                  download
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <FileSpreadsheet size={15} /> Download Excel
+                </a>
+              )}
+            </div>
           </div>
 
           {resultsLoading ? (
@@ -237,7 +266,24 @@ export default function MainScreen() {
                 <tbody>
                   {docs.map((doc) => {
                     const overallPct = doc.extraction?.overall_percentage
-                    const eligibilityStatus = doc.eligibility?.status || doc.status
+                    
+                    // Resolve status based on approvalMode
+                    const getResolvedStatus = () => {
+                      const status = doc.eligibility?.status || doc.status
+                      if (doc.eligibility?.is_manually_reviewed || doc.eligibility?.override_status) {
+                        return doc.eligibility?.override_status || status
+                      }
+                      if (approvalMode === 'auto' && status === 'REVIEW_REQUIRED') {
+                        const threshold = doc.eligibility?.eligibility_threshold ?? 50.0
+                        if (overallPct != null) {
+                          return overallPct > threshold ? 'ELIGIBLE' : 'NOT_ELIGIBLE'
+                        }
+                        return 'NOT_ELIGIBLE'
+                      }
+                      return status
+                    }
+                    
+                    const eligibilityStatus = getResolvedStatus()
                     return (
                       <tr key={doc.id}>
                         <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>

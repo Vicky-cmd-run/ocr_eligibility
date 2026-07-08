@@ -44,11 +44,21 @@ export const uploadFiles = (batchId: string, files: File[]): Promise<BatchUpload
   }).then(r => r.data)
 }
 
-export const exportCsv = (batchId: string, status?: string): string =>
-  `/api/batches/${batchId}/export/csv${status ? `?status=${status}` : ''}`
+export const exportCsv = (batchId: string, status?: string, approvalMode?: string): string => {
+  const params = new URLSearchParams()
+  if (status) params.append('status', status)
+  if (approvalMode) params.append('approval_mode', approvalMode)
+  const qs = params.toString()
+  return `/api/batches/${batchId}/export/csv${qs ? `?${qs}` : ''}`
+}
 
-export const exportXlsx = (batchId: string, status?: string): string =>
-  `/api/batches/${batchId}/export/xlsx${status ? `?status=${status}` : ''}`
+export const exportXlsx = (batchId: string, status?: string, approvalMode?: string): string => {
+  const params = new URLSearchParams()
+  if (status) params.append('status', status)
+  if (approvalMode) params.append('approval_mode', approvalMode)
+  const qs = params.toString()
+  return `/api/batches/${batchId}/export/xlsx${qs ? `?${qs}` : ''}`
+}
 
 // ─── Documents ────────────────────────────────────────────────────────────────
 

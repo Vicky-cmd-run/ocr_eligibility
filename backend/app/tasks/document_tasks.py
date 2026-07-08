@@ -120,10 +120,14 @@ def _persist_pipeline_result(document_id: str, result: dict, batch_settings: dic
                 db.delete(existing_candidate)
                 db.flush()
 
+            import os
+            filename_app_num = os.path.splitext(doc.original_filename)[0] if doc.original_filename else None
+            register_number = filename_app_num or extracted.register_number
+
             candidate = Candidate(
                 document_id=doc.id,
                 name=extracted.candidate_name,
-                register_number=extracted.register_number,
+                register_number=register_number,
                 raw_text_name=extracted.raw_text_name,
                 raw_text_register=extracted.raw_text_register,
             )

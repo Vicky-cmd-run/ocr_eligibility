@@ -86,6 +86,8 @@ export interface EligibilitySummary {
   rejection_reasons: string[]
   is_manually_reviewed: boolean
   review_notes: string | null
+  override_status: EligibilityStatus | null
+  eligibility_threshold: number | null
 }
 
 export interface DocumentRow {

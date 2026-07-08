@@ -10,7 +10,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-def _build_row(doc_data: Dict[str, Any]) -> Dict[str, Any]:
+def _build_row(doc_data: Dict[str, Any], approval_mode: str = "auto") -> Dict[str, Any]:
     """Flatten a document result dict into exactly the requested columns."""
     candidate = doc_data.get("candidate", {}) or {}
     extraction = doc_data.get("extraction_result", {}) or {}
@@ -19,11 +19,25 @@ def _build_row(doc_data: Dict[str, Any]) -> Dict[str, Any]:
     overall_pct = extraction.get("overall_percentage")
     pct_str = f"{overall_pct:.2f}%" if overall_pct is not None else ""
 
+    # Resolve status based on approval mode
+    status = eligibility.get("status", "") or doc_data.get("status", "") or "REVIEW_REQUIRED"
+    
+    if eligibility.get("is_manually_reviewed") or eligibility.get("override_status"):
+        resolved_status = eligibility.get("override_status") or status
+    elif approval_mode == "auto" and status == "REVIEW_REQUIRED":
+        threshold = eligibility.get("eligibility_threshold", 50.0)
+        if overall_pct is not None:
+            resolved_status = "ELIGIBLE" if overall_pct > threshold else "NOT_ELIGIBLE"
+        else:
+            resolved_status = "NOT_ELIGIBLE"
+    else:
+        resolved_status = status
+
     return {
         "Student's Name": candidate.get("name", "") or "Unknown",
         "Application Number": candidate.get("register_number", "") or "N/A",
         "Percentage": pct_str,
-        "Eligibility Status": eligibility.get("status", "") or "REVIEW_REQUIRED",
+        "Eligibility Status": resolved_status,
     }
 
 
@@ -35,18 +49,18 @@ def _fmt(val) -> str:
     return str(val)
 
 
-def generate_csv(rows: List[Dict[str, Any]]) -> bytes:
+def generate_csv(rows: List[Dict[str, Any]], approval_mode: str = "auto") -> bytes:
     """Generate a CSV export from a list of document result dicts."""
-    flat_rows = [_build_row(r) for r in rows]
+    flat_rows = [_build_row(r, approval_mode) for r in rows]
     df = pd.DataFrame(flat_rows)
     buf = io.BytesIO()
     df.to_csv(buf, index=False)
     return buf.getvalue()
 
 
-def generate_excel(rows: List[Dict[str, Any]]) -> bytes:
+def generate_excel(rows: List[Dict[str, Any]], approval_mode: str = "auto") -> bytes:
     """Generate an Excel (.xlsx) export from document result dicts."""
-    flat_rows = [_build_row(r) for r in rows]
+    flat_rows = [_build_row(r, approval_mode) for r in rows]
     df = pd.DataFrame(flat_rows)
 
     buf = io.BytesIO()
@@ -63,7 +77,7 @@ def generate_excel(rows: List[Dict[str, Any]]) -> bytes:
         worksheet.freeze_panes = "A2"
 
         # Color-code eligibility column
-        from openpyxl.styles import PatternFill, Font
+        from openpyxl.styles import PatternFill
         green_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
         red_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
         orange_fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
@@ -71,11 +85,12 @@ def generate_excel(rows: List[Dict[str, Any]]) -> bytes:
         status_col_idx = list(df.columns).index("Eligibility Status") + 1
         for row_idx, row_data in enumerate(flat_rows, start=2):
             cell = worksheet.cell(row=row_idx, column=status_col_idx)
-            if row_data.get("Eligibility Status") == "ELIGIBLE":
+            val = row_data.get("Eligibility Status")
+            if val == "ELIGIBLE":
                 cell.fill = green_fill
-            elif row_data.get("Eligibility Status") == "NOT_ELIGIBLE":
+            elif val == "NOT_ELIGIBLE":
                 cell.fill = red_fill
-            elif row_data.get("Eligibility Status") == "REVIEW_REQUIRED":
+            elif val == "REVIEW_REQUIRED":
                 cell.fill = orange_fill
 
     buf.seek(0)

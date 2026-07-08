@@ -84,6 +84,7 @@ async def _fetch_batch_results(
 async def export_csv(
     batch_id: uuid.UUID,
     status: Optional[str] = Query(None),
+    approval_mode: str = Query("auto"),
     db: AsyncSession = Depends(get_db),
 ):
     """Export batch results as CSV."""
@@ -92,7 +93,7 @@ async def export_csv(
         raise HTTPException(status_code=404, detail="Batch not found")
 
     rows = await _fetch_batch_results(batch_id, status, db)
-    csv_bytes = generate_csv(rows)
+    csv_bytes = generate_csv(rows, approval_mode=approval_mode)
 
     filename = f"batch_{str(batch_id)[:8]}_results.csv"
     return StreamingResponse(
@@ -106,6 +107,7 @@ async def export_csv(
 async def export_xlsx(
     batch_id: uuid.UUID,
     status: Optional[str] = Query(None),
+    approval_mode: str = Query("auto"),
     db: AsyncSession = Depends(get_db),
 ):
     """Export batch results as Excel (.xlsx)."""
@@ -114,7 +116,7 @@ async def export_xlsx(
         raise HTTPException(status_code=404, detail="Batch not found")
 
     rows = await _fetch_batch_results(batch_id, status, db)
-    xlsx_bytes = generate_excel(rows)
+    xlsx_bytes = generate_excel(rows, approval_mode=approval_mode)
 
     filename = f"batch_{str(batch_id)[:8]}_results.xlsx"
     return StreamingResponse(
