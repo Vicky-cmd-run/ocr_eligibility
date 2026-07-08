@@ -82,6 +82,10 @@ def run_pipeline(
         extracted: ExtractedDocument = extract_from_tokens(all_tokens)
         result["extracted"] = extracted
 
+        # Check if the document is actually a marksheet
+        if not extracted.subject_marks:
+            raise ValueError("Document does not appear to be a valid marksheet (no subjects or marks table detected)")
+
         # Validate
         validation = validate_document(extracted)
         result["validation"] = validation

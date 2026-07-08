@@ -241,7 +241,18 @@ export default function MainScreen() {
                     return (
                       <tr key={doc.id}>
                         <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {doc.candidate?.name || <span className="text-muted">Unknown</span>}
+                          {doc.candidate?.name || (
+                            doc.status === 'FAILED' ? (
+                              <span style={{ color: 'var(--not-eligible)', fontSize: '13.5px' }}>Upload Error</span>
+                            ) : (
+                              <span className="text-muted">Unknown</span>
+                            )
+                          )}
+                          {doc.status === 'FAILED' && doc.error_message && (
+                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 'normal', marginTop: '4px' }}>
+                              {doc.error_message}
+                            </div>
+                          )}
                         </td>
                         <td>
                           {doc.candidate?.register_number || <span className="text-muted">N/A</span>}
