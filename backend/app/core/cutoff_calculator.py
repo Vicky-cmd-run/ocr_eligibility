@@ -154,7 +154,7 @@ def calculate_cutoff(
 
     for m in subject_marks:
         raw = (m.raw_subject_name or "").lower()
-        if any(w in raw for w in ("grand total", "total", "aggregate", "overall")):
+        if m.normalized_subject == "TOTAL_MARK" or any(w in raw for w in ("grand total", "total", "aggregate", "overall")):
             if m.obtained_marks is not None and m.maximum_marks is not None and m.maximum_marks > 0:
                 total_obtained = m.obtained_marks
                 total_maximum = m.maximum_marks

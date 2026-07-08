@@ -20,6 +20,9 @@ NAME_PATTERNS = [
     re.compile(r"(?:student\s*name\s*[:\-]\s*)(.+)", re.IGNORECASE),
 ]
 REG_PATTERNS = [
+    re.compile(r"(?:application\s*(?:no|number|#|:)\s*)([A-Z0-9\-/]+)", re.IGNORECASE),
+    re.compile(r"(?:app\s*(?:no|:)\s*)([A-Z0-9\-/]+)", re.IGNORECASE),
+    re.compile(r"(?:app\.\s*(?:no|number|:)\s*)([A-Z0-9\-/]+)", re.IGNORECASE),
     re.compile(r"(?:register\s*(?:no|number|#|:)\s*)([A-Z0-9\-/]+)", re.IGNORECASE),
     re.compile(r"(?:roll\s*(?:no|number|#|:)\s*)([A-Z0-9\-/]+)", re.IGNORECASE),
     re.compile(r"(?:reg\s*(?:no|:)\s*)([A-Z0-9\-/]+)", re.IGNORECASE),
@@ -133,8 +136,8 @@ def _process_table_row(row: TableRow) -> Optional[ExtractedSubjectMark]:
 
     norm_result = normalize_subject(raw_subject)
 
-    # Skip rows that are clearly headers or totals
-    skip_words = {"total", "grand total", "aggregate", "result", "grade", "status", "pass", "fail"}
+    # Skip rows that are clearly headers or status columns
+    skip_words = {"result", "grade", "status", "pass", "fail"}
     if raw_subject.lower() in skip_words:
         return None
 
@@ -182,9 +185,18 @@ def _process_table_row(row: TableRow) -> Optional[ExtractedSubjectMark]:
         or combined_conf < 0.75
     )
 
+    # Classify mark type
+    raw_sub_lower = raw_subject.lower()
+    mark_type = "TOTAL"
+    if any(w in raw_sub_lower for w in ("theory", "th.", " th", "written")):
+        mark_type = "THEORY"
+    elif any(w in raw_sub_lower for w in ("practical", "pr.", " pr", "lab", "oral", "int.", "internal")):
+        mark_type = "PRACTICAL"
+
     return ExtractedSubjectMark(
         raw_subject_name=raw_subject,
         normalized_subject=norm_result.canonical,
+        mark_type=mark_type,
         obtained_marks=obtained_marks,
         maximum_marks=maximum_marks,
         percentage=percentage,
@@ -200,10 +212,10 @@ def _process_table_row(row: TableRow) -> Optional[ExtractedSubjectMark]:
 
 def _deduplicate_subjects(marks: List[ExtractedSubjectMark]) -> List[ExtractedSubjectMark]:
     """
-    Remove duplicate subject rows. When duplicates exist, prefer:
-    - TOTAL over THEORY/PRACTICAL
-    - Higher confidence over lower
-    - Flag as suspicious if duplicates differ significantly
+    Remove duplicate subject rows. When duplicates exist:
+    - If there is a TOTAL row, prefer it and ignore THEORY/PRACTICAL.
+    - If there are only THEORY and PRACTICAL rows, combine them into a virtual TOTAL row.
+    - Otherwise, fallback to the highest confidence row.
     """
     seen: Dict[str, List[ExtractedSubjectMark]] = {}
     for mark in marks:
@@ -214,11 +226,61 @@ def _deduplicate_subjects(marks: List[ExtractedSubjectMark]) -> List[ExtractedSu
     for subject, group in seen.items():
         if len(group) == 1:
             result.append(group[0])
+            continue
+
+        # Look for a TOTAL row
+        totals = [m for m in group if m.mark_type == "TOTAL"]
+        if totals:
+            # If multiple TOTAL rows exist, pick the highest confidence
+            best_total = max(totals, key=lambda m: m.subject_match_confidence)
+            best_total.notes = (best_total.notes or "") + f" [DEDUP: merged {len(group)} rows]"
+            result.append(best_total)
         else:
-            # Prefer higher confidence
-            best = max(group, key=lambda m: m.subject_match_confidence)
-            best.notes = (best.notes or "") + f" [DEDUP: {len(group)} rows merged]"
-            result.append(best)
+            # No TOTAL row, check if we can combine THEORY and PRACTICAL
+            theories = [m for m in group if m.mark_type == "THEORY"]
+            practicals = [m for m in group if m.mark_type == "PRACTICAL"]
+            
+            if theories or practicals:
+                obtained = 0.0
+                maximum = 0.0
+                valid_obtained = False
+                valid_maximum = False
+                ocr_conf_sum = 0.0
+                match_conf_sum = 0.0
+                count = 0
+                
+                for m in theories + practicals:
+                    if m.obtained_marks is not None:
+                        obtained += m.obtained_marks
+                        valid_obtained = True
+                    if m.maximum_marks is not None:
+                        maximum += m.maximum_marks
+                        valid_maximum = True
+                    ocr_conf_sum += m.marks_ocr_confidence
+                    match_conf_sum += m.subject_match_confidence
+                    count += 1
+                
+                avg_ocr_conf = ocr_conf_sum / count if count > 0 else 1.0
+                avg_match_conf = match_conf_sum / count if count > 0 else 1.0
+                
+                combined_mark = ExtractedSubjectMark(
+                    raw_subject_name=f"{subject} (Theory + Practical)",
+                    normalized_subject=subject,
+                    mark_type="TOTAL",
+                    obtained_marks=obtained if valid_obtained else None,
+                    maximum_marks=maximum if valid_maximum else None,
+                    percentage=(obtained / maximum * 100.0) if (valid_obtained and maximum > 0) else None,
+                    subject_match_confidence=avg_match_conf,
+                    marks_ocr_confidence=avg_ocr_conf,
+                    is_suspicious=any(m.is_suspicious for m in theories + practicals),
+                    notes="Combined from Theory and Practical splits.",
+                    needs_review=any(m.needs_review for m in theories + practicals),
+                )
+                result.append(combined_mark)
+            else:
+                # Fallback: just pick the highest confidence row
+                best = max(group, key=lambda m: m.subject_match_confidence)
+                result.append(best)
 
     return result
 

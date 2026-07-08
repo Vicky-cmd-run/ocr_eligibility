@@ -64,7 +64,7 @@ export default function ReviewPage() {
   const filePreviewUrl = `/uploads/${doc.file_path.split('/uploads/').pop()}`
 
   return (
-    <>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
       <div className="page-header">
         <div className="flex items-center gap-3">
           <button className="btn btn-secondary btn-sm" onClick={() => navigate(-1)}>
@@ -320,7 +320,7 @@ export default function ReviewPage() {
           )}
         </div>
       </div>
-    </>
+    </div>
   )
 }
 

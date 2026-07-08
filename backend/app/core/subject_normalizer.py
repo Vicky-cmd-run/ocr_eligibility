@@ -17,11 +17,21 @@ CHEMISTRY = "CHEMISTRY"
 MATHEMATICS = "MATHEMATICS"
 MATHS_A = "MATHS_A"
 MATHS_B = "MATHS_B"
+TOTAL_MARK = "TOTAL_MARK"
 OTHER = "OTHER"
 UNKNOWN = "UNKNOWN"
 
 # Exact + alias mapping (lowercase normalized keys → canonical)
 EXACT_ALIASES: Dict[str, str] = {
+    # Totals
+    "grand total": TOTAL_MARK,
+    "total": TOTAL_MARK,
+    "aggregate": TOTAL_MARK,
+    "overall": TOTAL_MARK,
+    "overall total": TOTAL_MARK,
+    "total marks": TOTAL_MARK,
+    "grand total marks": TOTAL_MARK,
+
     # Physics
     "physics": PHYSICS,
     "physics theory": PHYSICS,

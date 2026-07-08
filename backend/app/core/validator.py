@@ -95,8 +95,8 @@ def validate_mark(mark: ExtractedSubjectMark) -> ValidationResult:
             f"Suspicious OCR characters detected — possible substitution errors"
         )
 
-    # 7. Maximum marks sanity check (too low or too high)
-    if mark.maximum_marks is not None:
+    # 7. Maximum marks sanity check (too low or too high) — exclude TOTAL_MARK
+    if mark.maximum_marks is not None and subject != "TOTAL_MARK":
         if mark.maximum_marks < 10:
             result.add_warning(
                 f"{subject}.maximum",
