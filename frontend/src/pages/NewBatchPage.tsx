@@ -11,6 +11,8 @@ const ACCEPTED_TYPES = {
   'application/pdf': ['.pdf'],
   'image/jpeg': ['.jpg', '.jpeg'],
   'image/png': ['.png'],
+  'application/zip': ['.zip'],
+  'application/x-zip-compressed': ['.zip'],
 }
 
 export default function NewBatchPage() {
@@ -119,7 +121,7 @@ export default function NewBatchPage() {
             <div className="dropzone-icon">📄</div>
             <h3>{isDragActive ? 'Drop files here...' : 'Drag & Drop Marksheets'}</h3>
             <p>or click to browse files</p>
-            <p className="text-muted text-sm mt-2">PDF, JPG, JPEG, PNG — up to 50 MB each — max {MAX_FILES} files</p>
+            <p className="text-muted text-sm mt-2">PDF, JPG, JPEG, PNG, ZIP — up to 50 MB each — max {MAX_FILES} files</p>
           </div>
 
           {files.length > 0 && (

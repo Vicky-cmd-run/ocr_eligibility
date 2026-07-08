@@ -20,6 +20,7 @@ from app.models.document import Document, DocumentStatus
 from app.core.ingestion import (
     validate_file, store_file, read_upload_content,
     detect_mime_type, compute_sha256, FileIngestionError,
+    extract_zip_files, get_file_extension,
 )
 from app.tasks.document_tasks import process_document
 from app.config import settings
@@ -80,19 +81,65 @@ async def upload_files(
     duplicates = 0
     errors = 0
 
+    # Expand all files (handling ZIP files)
+    files_to_process: List[Tuple[str, bytes]] = []
     for file in files:
         try:
             content = await read_upload_content(file)
             validate_file(file, content)
 
-            file_hash = compute_sha256(content)
             mime_type = detect_mime_type(content, file.filename or "")
+            ext = get_file_extension(file.filename or "")
+
+            if ext == "zip" or mime_type in ("application/zip", "application/x-zip-compressed"):
+                extracted = extract_zip_files(content)
+                if not extracted:
+                    errors += 1
+                    results.append(UploadFileResult(
+                        filename=file.filename or "",
+                        document_id=None,
+                        status="error",
+                        message="ZIP archive contains no supported files (.pdf, .jpg, .jpeg, .png)",
+                    ))
+                else:
+                    files_to_process.extend(extracted)
+            else:
+                files_to_process.append((file.filename or "unknown", content))
+        except FileIngestionError as e:
+            errors += 1
+            results.append(UploadFileResult(
+                filename=file.filename or "",
+                document_id=None,
+                status="error",
+                message=str(e),
+            ))
+        except Exception as e:
+            logger.exception(f"Unexpected error validating {file.filename}: {e}")
+            errors += 1
+            results.append(UploadFileResult(
+                filename=file.filename or "",
+                document_id=None,
+                status="error",
+                message=f"Validation error: {str(e)}",
+            ))
+
+    if len(files_to_process) > settings.max_batch_size:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many documents extracted. Maximum per batch: {settings.max_batch_size}"
+        )
+
+    # Process all expanded documents
+    for original_filename, content in files_to_process:
+        try:
+            file_hash = compute_sha256(content)
+            mime_type = detect_mime_type(content, original_filename)
 
             # Duplicate detection within batch
             if file_hash in existing_hashes:
                 duplicates += 1
                 results.append(UploadFileResult(
-                    filename=file.filename or "",
+                    filename=original_filename,
                     document_id=None,
                     status="duplicate",
                     message="File already exists in this batch",
@@ -100,13 +147,13 @@ async def upload_files(
                 continue
 
             # Store file
-            stored_filename, file_path, _ = store_file(content, file.filename or "", batch_id)
+            stored_filename, file_path, _ = store_file(content, original_filename, batch_id)
             existing_hashes.add(file_hash)
 
             # Create Document record
             doc = Document(
                 batch_id=batch_id,
-                original_filename=file.filename or stored_filename,
+                original_filename=original_filename,
                 stored_filename=stored_filename,
                 file_path=file_path,
                 file_size_bytes=len(content),
@@ -134,28 +181,20 @@ async def upload_files(
 
             queued += 1
             results.append(UploadFileResult(
-                filename=file.filename or "",
+                filename=original_filename,
                 document_id=doc.id,
                 status="queued",
                 message=None,
             ))
 
-        except FileIngestionError as e:
-            errors += 1
-            results.append(UploadFileResult(
-                filename=file.filename or "",
-                document_id=None,
-                status="error",
-                message=str(e),
-            ))
         except Exception as e:
-            logger.exception(f"Unexpected error uploading {file.filename}: {e}")
+            logger.exception(f"Unexpected error processing {original_filename}: {e}")
             errors += 1
             results.append(UploadFileResult(
-                filename=file.filename or "",
+                filename=original_filename,
                 document_id=None,
                 status="error",
-                message=f"Internal error: {str(e)}",
+                message=f"Processing error: {str(e)}",
             ))
 
     # Update batch counters

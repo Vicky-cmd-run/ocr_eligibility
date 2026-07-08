@@ -12,14 +12,19 @@ from typing import List, Tuple
 from fastapi import UploadFile, HTTPException
 from app.config import settings
 
+import zipfile
+import io
+
 ALLOWED_MIME_TYPES = {
     "application/pdf",
     "image/jpeg",
     "image/jpg",
     "image/png",
+    "application/zip",
+    "application/x-zip-compressed",
 }
 
-ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
+ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png", "zip"}
 
 
 class FileIngestionError(Exception):
@@ -117,3 +122,26 @@ def cleanup_batch_uploads(batch_id: uuid.UUID) -> None:
     batch_dir = Path(settings.upload_dir) / str(batch_id)
     if batch_dir.exists():
         shutil.rmtree(batch_dir, ignore_errors=True)
+
+
+def extract_zip_files(zip_content: bytes) -> List[Tuple[str, bytes]]:
+    """
+    Extract files from a ZIP archive.
+    Returns a list of tuples containing (original_filename, content).
+    Filters out unsupported files and directories.
+    """
+    extracted = []
+    with zipfile.ZipFile(io.BytesIO(zip_content)) as z:
+        for file_info in z.infolist():
+            if file_info.is_dir():
+                continue
+            
+            basename = os.path.basename(file_info.filename)
+            if basename.startswith(".") or "__MACOSX" in file_info.filename:
+                continue
+                
+            ext = get_file_extension(basename)
+            if ext in {"pdf", "jpg", "jpeg", "png"}:
+                with z.open(file_info) as f:
+                    extracted.append((basename, f.read()))
+    return extracted
