@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Node.js
+node_modules/
+dist/
+dist-ssr/
+*.local
+.eslintcache
+
+# Project uploads
+backend/uploads/
+uploads/
+
+# Local Environment Variables
+.env
+! .env.example
