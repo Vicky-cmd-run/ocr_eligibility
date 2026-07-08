@@ -71,10 +71,25 @@ class OCREngine:
         """
         Run OCR on a numpy BGR image.
         Returns list of OcrToken sorted by top-to-bottom, left-to-right position.
+        Resizes the image for CPU speedup if it exceeds max size, scaling back coordinates afterward.
         """
+        # Resize image for speedup if too large
+        orig_h, orig_w = image.shape[:2]
+        max_side = 1800.0
+        scale = 1.0
+        ocr_image = image
+        
+        if max(orig_h, orig_w) > max_side:
+            import cv2
+            scale = max_side / max(orig_h, orig_w)
+            new_w = int(orig_w * scale)
+            new_h = int(orig_h * scale)
+            ocr_image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+            logger.info(f"Resized image from {orig_w}x{orig_h} to {new_w}x{new_h} (scale={scale:.3f}) for OCR speedup.")
+
         ocr = self._get_ocr()
         try:
-            result = ocr.ocr(image)
+            result = ocr.ocr(ocr_image)
         except Exception as e:
             logger.error(f"PaddleOCR failed on page {page_number}: {e}")
             return []
@@ -106,6 +121,14 @@ class OCREngine:
                     bbox = [[float(p[0]), float(p[1])] for p in box]
                     x_min, y_min, x_max, y_max = _bbox_to_aabb(bbox)
                 
+                # Scale back to original coordinates
+                if scale != 1.0:
+                    x_min /= scale
+                    y_min /= scale
+                    x_max /= scale
+                    y_max /= scale
+                    bbox = [[p[0] / scale, p[1] / scale] for p in bbox]
+
                 tokens.append(OcrToken(
                     text=text.strip(),
                     confidence=conf,
@@ -130,6 +153,14 @@ class OCREngine:
                     # Normalize bounding box to list of [x,y] pairs
                     bbox = [[float(p[0]), float(p[1])] for p in bbox_raw]
                     x_min, y_min, x_max, y_max = _bbox_to_aabb(bbox)
+
+                    # Scale back to original coordinates
+                    if scale != 1.0:
+                        x_min /= scale
+                        y_min /= scale
+                        x_max /= scale
+                        y_max /= scale
+                        bbox = [[p[0] / scale, p[1] / scale] for p in bbox]
 
                     tokens.append(OcrToken(
                         text=text.strip(),

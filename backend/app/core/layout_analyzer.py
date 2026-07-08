@@ -38,7 +38,15 @@ def tokens_on_same_row(t1: OcrToken, t2: OcrToken, tolerance: float = ROW_Y_TOLE
     """True if two tokens share approximately the same vertical center."""
     c1 = (t1.y_min + t1.y_max) / 2
     c2 = (t2.y_min + t2.y_max) / 2
-    return abs(c1 - c2) <= tolerance
+    
+    # Dynamically scale tolerance based on token heights for cross-resolution consistency
+    h1 = t1.y_max - t1.y_min
+    h2 = t2.y_max - t2.y_min
+    avg_h = (h1 + h2) / 2
+    
+    # 45% of the average text height is standard for same-line deviation
+    dynamic_tol = max(avg_h * 0.45, 12.0)
+    return abs(c1 - c2) <= dynamic_tol
 
 
 def is_numeric_or_absent(text: str) -> bool:
