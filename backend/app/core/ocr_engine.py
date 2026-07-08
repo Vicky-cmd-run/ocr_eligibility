@@ -54,11 +54,11 @@ class OCREngine:
         if self._ocr is None:
             try:
                 from paddleocr import PaddleOCR
+                device = "gpu" if settings.paddleocr_use_gpu else "cpu"
                 self._ocr = PaddleOCR(
-                    use_angle_cls=True,
+                    use_textline_orientation=True,
                     lang=settings.paddleocr_lang,
-                    use_gpu=settings.paddleocr_use_gpu,
-                    show_log=False,
+                    device=device,
                     enable_mkldnn=False,
                 )
                 logger.info("PaddleOCR initialized successfully")
