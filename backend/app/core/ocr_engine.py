@@ -74,7 +74,7 @@ class OCREngine:
         """
         ocr = self._get_ocr()
         try:
-            result = ocr.ocr(image, cls=True)
+            result = ocr.ocr(image)
         except Exception as e:
             logger.error(f"PaddleOCR failed on page {page_number}: {e}")
             return []
@@ -84,23 +84,31 @@ class OCREngine:
         if not result:
             return tokens
 
-        for line_result in result:
-            if not line_result:
-                continue
-            for item in line_result:
-                if not item or len(item) < 2:
-                    continue
-                bbox_raw, (text, conf) = item
+        # Check if result is in new list-of-dicts format
+        if isinstance(result, list) and len(result) > 0 and isinstance(result[0], dict) and 'rec_texts' in result[0]:
+            page_res = result[0]
+            texts = page_res.get('rec_texts', [])
+            scores = page_res.get('rec_scores', [])
+            boxes = page_res.get('rec_boxes', [])
+            
+            for i in range(len(texts)):
+                text = texts[i]
                 if not text or not text.strip():
                     continue
-
-                # Normalize bounding box to list of [x,y] pairs
-                bbox = [[float(p[0]), float(p[1])] for p in bbox_raw]
-                x_min, y_min, x_max, y_max = _bbox_to_aabb(bbox)
-
+                conf = float(scores[i]) if i < len(scores) else 1.0
+                box = boxes[i] if i < len(boxes) else [0.0, 0.0, 0.0, 0.0]
+                
+                # Check box format (could be [xmin, ymin, xmax, ymax] or [[x1,y1], ...])
+                if len(box) == 4 and not isinstance(box[0], (list, tuple, np.ndarray)):
+                    x_min, y_min, x_max, y_max = [float(v) for v in box]
+                    bbox = [[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]]
+                else:
+                    bbox = [[float(p[0]), float(p[1])] for p in box]
+                    x_min, y_min, x_max, y_max = _bbox_to_aabb(bbox)
+                
                 tokens.append(OcrToken(
                     text=text.strip(),
-                    confidence=float(conf),
+                    confidence=conf,
                     page_number=page_number,
                     bounding_box=bbox,
                     x_min=x_min,
@@ -108,6 +116,31 @@ class OCREngine:
                     x_max=x_max,
                     y_max=y_max,
                 ))
+        else:
+            for line_result in result:
+                if not line_result:
+                    continue
+                for item in line_result:
+                    if not item or len(item) < 2:
+                        continue
+                    bbox_raw, (text, conf) = item
+                    if not text or not text.strip():
+                        continue
+
+                    # Normalize bounding box to list of [x,y] pairs
+                    bbox = [[float(p[0]), float(p[1])] for p in bbox_raw]
+                    x_min, y_min, x_max, y_max = _bbox_to_aabb(bbox)
+
+                    tokens.append(OcrToken(
+                        text=text.strip(),
+                        confidence=float(conf),
+                        page_number=page_number,
+                        bounding_box=bbox,
+                        x_min=x_min,
+                        y_min=y_min,
+                        x_max=x_max,
+                        y_max=y_max,
+                    ))
 
         # Sort top-to-bottom (y), then left-to-right (x)
         tokens.sort(key=lambda t: (t.y_min, t.x_min))
