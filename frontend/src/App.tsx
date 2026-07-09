@@ -25,17 +25,28 @@ export default function App() {
             <div style={{
               width: '38px',
               height: '38px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--accent), #7c3aed)',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 50%, #ec4899 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#ffffff',
-              fontSize: '20px',
-              fontWeight: 900,
-              boxShadow: '0 4px 10px rgba(37, 99, 235, 0.2)'
+              boxShadow: '0 4px 12px rgba(139, 92, 246, 0.3)',
+              position: 'relative',
+              overflow: 'hidden'
             }}>
-              V
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                border: '1px solid rgba(255, 255, 255, 0.25)',
+                borderRadius: '12px',
+                pointerEvents: 'none'
+              }} />
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#ffffff', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}>
+                <path d="M4 4.5L12 20L20 4.5" />
+              </svg>
             </div>
             <div>
               <h1 style={{
@@ -74,7 +85,7 @@ export default function App() {
           Viggu - Lazy but Smart
         </div>
         <div style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
-          Academic Screening Authority • Department of Eligibility & Cutoff Calculations • All Rights Reserved
+          © {new Date().getFullYear()} VIGGU. All Rights Reserved.
         </div>
       </footer>
     </div>

@@ -32,6 +32,7 @@ export default function MainScreen() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [approvalMode, setApprovalMode] = useState<'auto' | 'manual'>('auto')
   const hasInitializedBatchRef = useRef(false)
+  const [pollInterval, setPollInterval] = useState<number | false>(3000)
 
   // Fetch past batches list
   const { data: batches = [], refetch: refetchBatches } = useQuery<Batch[]>({
@@ -44,10 +45,7 @@ export default function MainScreen() {
     queryKey: ['batch', selectedBatchId],
     queryFn: () => getBatch(selectedBatchId!),
     enabled: !!selectedBatchId,
-    refetchInterval: (query) => {
-      const b = query.state.data as Batch | undefined
-      return b && (b.status === 'PENDING' || b.status === 'PROCESSING') ? 3000 : false
-    },
+    refetchInterval: pollInterval,
   })
 
   // Fetch batch progress
@@ -55,7 +53,7 @@ export default function MainScreen() {
     queryKey: ['batch-progress', selectedBatchId],
     queryFn: () => getBatchProgress(selectedBatchId!),
     enabled: !!selectedBatchId && batch?.status === 'PROCESSING',
-    refetchInterval: 3000,
+    refetchInterval: pollInterval,
   })
 
   // Fetch results table
@@ -63,11 +61,21 @@ export default function MainScreen() {
     queryKey: ['batch-results', selectedBatchId],
     queryFn: () => getBatchResults(selectedBatchId!, { skip: 0, limit: 1000 }),
     enabled: !!selectedBatchId,
-    refetchInterval: () => {
-      const b = qc.getQueryData<Batch>(['batch', selectedBatchId])
-      return b && (b.status === 'PENDING' || b.status === 'PROCESSING') ? 3000 : false
-    },
+    refetchInterval: pollInterval,
   })
+
+  // Control dynamic polling intervals reactively using state
+  useEffect(() => {
+    if (!selectedBatchId) {
+      setPollInterval(false)
+      return
+    }
+    if (!batch || batch.status === 'PENDING' || batch.status === 'PROCESSING') {
+      setPollInterval(3000)
+    } else {
+      setPollInterval(false)
+    }
+  }, [selectedBatchId, batch])
 
   // Save selected batch to localStorage
   useEffect(() => {
