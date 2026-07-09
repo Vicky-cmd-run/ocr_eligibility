@@ -31,8 +31,11 @@ class DocumentProcessingTask(Task):
 
     def on_failure(self, exc, task_id, args, kwargs, einfo):
         doc_id = kwargs.get("document_id") or (args[0] if args else None)
+        batch_id = kwargs.get("batch_id") or (args[3] if args and len(args) > 3 else None)
         if doc_id:
             _update_document_status(str(doc_id), "FAILED", error=str(exc))
+        if batch_id:
+            _update_batch_counts(str(batch_id))
         logger.error(f"Task {task_id} failed: {exc}")
 
     def on_retry(self, exc, task_id, args, kwargs, einfo):
@@ -328,6 +331,7 @@ def process_document(
 
     # Mark as PROCESSING
     _update_document_status(document_id, "PROCESSING")
+    _update_batch_counts(batch_id)
 
     try:
         result = run_pipeline(

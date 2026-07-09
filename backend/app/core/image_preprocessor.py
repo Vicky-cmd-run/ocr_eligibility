@@ -102,17 +102,17 @@ class ImagePreprocessor:
         for angle in [0, 90, 180, 270]:
             if angle == 0:
                 rotated = gray
+            elif angle == 90:
+                rotated = cv2.rotate(gray, cv2.ROTATE_90_CLOCKWISE)
+            elif angle == 180:
+                rotated = cv2.rotate(gray, cv2.ROTATE_180)
+            elif angle == 270:
+                rotated = cv2.rotate(gray, cv2.ROTATE_90_COUNTERCLOCKWISE)
             else:
-                center = (gray.shape[1] // 2, gray.shape[0] // 2)
-                M = cv2.getRotationMatrix2D(center, angle, 1.0)
-                rotated = cv2.warpAffine(
-                    gray, M, (gray.shape[1], gray.shape[0]),
-                    flags=cv2.INTER_LINEAR,
-                    borderMode=cv2.BORDER_REPLICATE,
-                )
+                rotated = gray
 
-            # Use horizontal projection profile variance as quality metric
-            projection = np.sum(rotated < 128, axis=1).astype(float)
+            # Use normalized horizontal projection profile variance as quality metric
+            projection = np.sum(rotated < 128, axis=1).astype(float) / rotated.shape[1]
             var = float(np.var(projection))
             if var > best_var:
                 best_var = var

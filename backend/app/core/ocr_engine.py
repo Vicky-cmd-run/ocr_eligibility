@@ -56,7 +56,7 @@ class OCREngine:
                 from paddleocr import PaddleOCR
                 device = "gpu" if settings.paddleocr_use_gpu else "cpu"
                 self._ocr = PaddleOCR(
-                    use_angle_cls=False,
+                    use_angle_cls=True,
                     lang=settings.paddleocr_lang,
                     device=device,
                     enable_mkldnn=False,
