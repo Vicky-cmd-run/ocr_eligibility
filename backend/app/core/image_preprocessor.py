@@ -28,7 +28,7 @@ class ImagePreprocessor:
         enhance_contrast: bool = True,
         adaptive_threshold: bool = False,
         perspective_correct: bool = True,
-        target_width: int = 2000,
+        target_width: int = 1800,
     ):
         self.auto_rotate = auto_rotate
         self.deskew = deskew
@@ -82,11 +82,12 @@ class ImagePreprocessor:
     def _resize(self, img: np.ndarray) -> np.ndarray:
         """Resize image so width = target_width, preserving aspect ratio."""
         h, w = img.shape[:2]
-        if w < self.target_width:
+        if w != self.target_width and w > 0:
             scale = self.target_width / w
             new_w = self.target_width
             new_h = int(h * scale)
-            img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+            interp = cv2.INTER_AREA if w > self.target_width else cv2.INTER_CUBIC
+            img = cv2.resize(img, (new_w, new_h), interpolation=interp)
         return img
 
     def _auto_rotate(self, gray: np.ndarray) -> np.ndarray:

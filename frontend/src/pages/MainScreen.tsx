@@ -32,8 +32,6 @@ export default function MainScreen() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [approvalMode, setApprovalMode] = useState<'auto' | 'manual'>('auto')
   const hasInitializedBatchRef = useRef(false)
-  const [pollInterval, setPollInterval] = useState<number | false>(3000)
-
   // Fetch past batches list
   const { data: batches = [], refetch: refetchBatches } = useQuery<Batch[]>({
     queryKey: ['batches'],
@@ -45,7 +43,7 @@ export default function MainScreen() {
     queryKey: ['batch', selectedBatchId],
     queryFn: () => getBatch(selectedBatchId!),
     enabled: !!selectedBatchId,
-    refetchInterval: pollInterval,
+    refetchInterval: selectedBatchId ? 3000 : false,
   })
 
   // Fetch batch progress
@@ -53,7 +51,7 @@ export default function MainScreen() {
     queryKey: ['batch-progress', selectedBatchId],
     queryFn: () => getBatchProgress(selectedBatchId!),
     enabled: !!selectedBatchId && batch?.status === 'PROCESSING',
-    refetchInterval: pollInterval,
+    refetchInterval: selectedBatchId ? 3000 : false,
   })
 
   // Fetch results table
@@ -61,21 +59,8 @@ export default function MainScreen() {
     queryKey: ['batch-results', selectedBatchId],
     queryFn: () => getBatchResults(selectedBatchId!, { skip: 0, limit: 1000 }),
     enabled: !!selectedBatchId,
-    refetchInterval: pollInterval,
+    refetchInterval: selectedBatchId ? 3000 : false,
   })
-
-  // Control dynamic polling intervals reactively using state
-  useEffect(() => {
-    if (!selectedBatchId) {
-      setPollInterval(false)
-      return
-    }
-    if (!batch || batch.status === 'PENDING' || batch.status === 'PROCESSING') {
-      setPollInterval(3000)
-    } else {
-      setPollInterval(false)
-    }
-  }, [selectedBatchId, batch])
 
   // Save selected batch to localStorage
   useEffect(() => {

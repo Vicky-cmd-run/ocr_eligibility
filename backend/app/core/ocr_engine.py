@@ -56,40 +56,38 @@ class OCREngine:
                 from paddleocr import PaddleOCR
                 device = "gpu" if settings.paddleocr_use_gpu else "cpu"
                 self._ocr = PaddleOCR(
-                    use_textline_orientation=True,
+                    use_angle_cls=False,
                     lang=settings.paddleocr_lang,
                     device=device,
                     enable_mkldnn=False,
                 )
-                logger.info("PaddleOCR initialized successfully")
+                logger.info("PaddleOCR initialized successfully (Fast OCR mode)")
             except ImportError:
                 logger.error("PaddleOCR not installed. Install paddlepaddle and paddleocr.")
                 raise
         return self._ocr
 
-    def run_on_image(self, image: np.ndarray, page_number: int = 1) -> List[OcrToken]:
+    def run_on_image(
+        self,
+        image: np.ndarray,
+        page_number: int = 1,
+        original_size: Optional[tuple] = None,
+    ) -> List[OcrToken]:
         """
         Run OCR on a numpy BGR image.
         Returns list of OcrToken sorted by top-to-bottom, left-to-right position.
-        Resizes the image for CPU speedup if it exceeds max size, scaling back coordinates afterward.
         """
-        # Resize image for speedup if too large
-        orig_h, orig_w = image.shape[:2]
-        max_side = 1800.0
+        # Determine scale factor based on original image dimensions
         scale = 1.0
-        ocr_image = image
-        
-        if max(orig_h, orig_w) > max_side:
-            import cv2
-            scale = max_side / max(orig_h, orig_w)
-            new_w = int(orig_w * scale)
-            new_h = int(orig_h * scale)
-            ocr_image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_AREA)
-            logger.info(f"Resized image from {orig_w}x{orig_h} to {new_w}x{new_h} (scale={scale:.3f}) for OCR speedup.")
+        if original_size:
+            orig_h, orig_w = original_size
+            curr_h, curr_w = image.shape[:2]
+            if orig_w > 0:
+                scale = curr_w / orig_w
 
         ocr = self._get_ocr()
         try:
-            result = ocr.ocr(ocr_image)
+            result = ocr.ocr(image)
         except Exception as e:
             logger.error(f"PaddleOCR failed on page {page_number}: {e}")
             return []
@@ -122,7 +120,7 @@ class OCREngine:
                     x_min, y_min, x_max, y_max = _bbox_to_aabb(bbox)
                 
                 # Scale back to original coordinates
-                if scale != 1.0:
+                if scale != 1.0 and scale > 0:
                     x_min /= scale
                     y_min /= scale
                     x_max /= scale
@@ -155,7 +153,7 @@ class OCREngine:
                     x_min, y_min, x_max, y_max = _bbox_to_aabb(bbox)
 
                     # Scale back to original coordinates
-                    if scale != 1.0:
+                    if scale != 1.0 and scale > 0:
                         x_min /= scale
                         y_min /= scale
                         x_max /= scale

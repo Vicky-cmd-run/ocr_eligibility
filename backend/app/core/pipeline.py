@@ -64,7 +64,7 @@ def run_pipeline(
                     page_tokens = ocr.run_on_text(page.text, page_number=page.page_number)
                 else:
                     processed = preprocessor.preprocess(page.image)
-                    page_tokens = ocr.run_on_image(processed, page_number=page.page_number)
+                    page_tokens = ocr.run_on_image(processed, page_number=page.page_number, original_size=page.image.shape[:2])
                 all_tokens.extend(page_tokens)
 
         else:
@@ -74,7 +74,7 @@ def run_pipeline(
             img = load_image(file_path)
             processed = preprocessor.preprocess(img)
             ocr = get_ocr_engine()
-            all_tokens = ocr.run_on_image(processed, page_number=1)
+            all_tokens = ocr.run_on_image(processed, page_number=1, original_size=img.shape[:2])
 
         result["ocr_tokens"] = all_tokens
 
