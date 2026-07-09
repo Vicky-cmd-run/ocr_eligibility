@@ -71,20 +71,11 @@ class OCREngine:
         self,
         image: np.ndarray,
         page_number: int = 1,
-        original_size: Optional[tuple] = None,
     ) -> List[OcrToken]:
         """
         Run OCR on a numpy BGR image.
         Returns list of OcrToken sorted by top-to-bottom, left-to-right position.
         """
-        # Determine scale factor based on original image dimensions
-        scale = 1.0
-        if original_size:
-            orig_h, orig_w = original_size
-            curr_h, curr_w = image.shape[:2]
-            if orig_w > 0:
-                scale = curr_w / orig_w
-
         ocr = self._get_ocr()
         try:
             result = ocr.ocr(image)
@@ -118,14 +109,6 @@ class OCREngine:
                 else:
                     bbox = [[float(p[0]), float(p[1])] for p in box]
                     x_min, y_min, x_max, y_max = _bbox_to_aabb(bbox)
-                
-                # Scale back to original coordinates
-                if scale != 1.0 and scale > 0:
-                    x_min /= scale
-                    y_min /= scale
-                    x_max /= scale
-                    y_max /= scale
-                    bbox = [[p[0] / scale, p[1] / scale] for p in bbox]
 
                 tokens.append(OcrToken(
                     text=text.strip(),
@@ -151,14 +134,6 @@ class OCREngine:
                     # Normalize bounding box to list of [x,y] pairs
                     bbox = [[float(p[0]), float(p[1])] for p in bbox_raw]
                     x_min, y_min, x_max, y_max = _bbox_to_aabb(bbox)
-
-                    # Scale back to original coordinates
-                    if scale != 1.0 and scale > 0:
-                        x_min /= scale
-                        y_min /= scale
-                        x_max /= scale
-                        y_max /= scale
-                        bbox = [[p[0] / scale, p[1] / scale] for p in bbox]
 
                     tokens.append(OcrToken(
                         text=text.strip(),

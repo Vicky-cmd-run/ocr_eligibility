@@ -95,6 +95,9 @@ def _persist_pipeline_result(document_id: str, result: dict, batch_settings: dic
             return
 
         # Persist OCR tokens (limit to 500 per doc to avoid DB bloat)
+        db.query(OcrTokenModel).filter(OcrTokenModel.document_id == doc.id).delete()
+        db.flush()
+
         tokens = result.get("ocr_tokens", [])[:500]
         for token in tokens:
             token_model = OcrTokenModel(

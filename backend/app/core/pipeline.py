@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import List
 
+import cv2
 from app.core.ocr_engine import OcrToken, get_ocr_engine
 from app.core.pdf_processor import process_pdf, detect_marks_page
 from app.core.image_preprocessor import ImagePreprocessor, load_image
@@ -64,7 +65,7 @@ def run_pipeline(
                     page_tokens = ocr.run_on_text(page.text, page_number=page.page_number)
                 else:
                     processed = preprocessor.preprocess(page.image)
-                    page_tokens = ocr.run_on_image(processed, page_number=page.page_number, original_size=page.image.shape[:2])
+                    page_tokens = ocr.run_on_image(processed, page_number=page.page_number)
                 all_tokens.extend(page_tokens)
 
         else:
@@ -73,8 +74,11 @@ def run_pipeline(
             result["page_count"] = 1
             img = load_image(file_path)
             processed = preprocessor.preprocess(img)
+            # Write preprocessed, rotated, and resized image back to disk!
+            cv2.imwrite(file_path, processed)
+            logger.info(f"Saved preprocessed image to disk at: {file_path}")
             ocr = get_ocr_engine()
-            all_tokens = ocr.run_on_image(processed, page_number=1, original_size=img.shape[:2])
+            all_tokens = ocr.run_on_image(processed, page_number=1)
 
         result["ocr_tokens"] = all_tokens
 

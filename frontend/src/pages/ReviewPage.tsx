@@ -122,10 +122,11 @@ export default function ReviewPage() {
                 const width = (token.x_max - token.x_min) * scaleX
                 const height = (token.y_max - token.y_min) * scaleY
 
-                // Check matches
+                // Check matches (limit name matching to upper 40% of page to avoid false highlights)
                 const isNameMatch = candidate?.name && 
                   candidate.name.toLowerCase().includes(token.text.toLowerCase()) && 
-                  token.text.length > 2
+                  token.text.length > 2 &&
+                  token.y_min < imgSize.naturalHeight * 0.40
 
                 let isSubjectMatch = false
                 let isMarkMatch = false
