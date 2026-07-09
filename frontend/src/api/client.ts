@@ -77,3 +77,6 @@ export const submitReview = (
 
 export const reprocessDocument = (documentId: string) =>
   api.post(`/documents/${documentId}/reprocess`).then(r => r.data)
+
+export const getOcrTokens = (documentId: string): Promise<any[]> =>
+  api.get(`/documents/${documentId}/ocr`).then(r => r.data)

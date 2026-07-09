@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Save, RefreshCw, ArrowLeft, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
-import { getDocumentReview, submitReview, reprocessDocument } from '../api/client'
+import { getDocumentReview, submitReview, reprocessDocument, getOcrTokens } from '../api/client'
 import type { SubjectMark } from '../types'
 import DocumentStatusBadge from '../components/DocumentStatusBadge'
 import { fmtPct, fmtConf } from '../utils'
@@ -19,9 +19,29 @@ export default function ReviewPage() {
     enabled: !!documentId,
   })
 
+  const { data: ocrTokens = [] } = useQuery({
+    queryKey: ['ocr-tokens', documentId],
+    queryFn: () => getOcrTokens(documentId!),
+    enabled: !!documentId,
+  })
+
   const [corrections, setCorrections] = useState<Record<string, { obtained: string; maximum: string }>>({})
   const [overrideStatus, setOverrideStatus] = useState('')
   const [reviewNotes, setReviewNotes] = useState('')
+  
+  const [hoveredSubjectId, setHoveredSubjectId] = useState<string | null>(null)
+  const [hoveredName, setHoveredName] = useState(false)
+  const [imgSize, setImgSize] = useState({ width: 0, height: 0, naturalWidth: 0, naturalHeight: 0 })
+
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget
+    setImgSize({
+      width: img.clientWidth,
+      height: img.clientHeight,
+      naturalWidth: img.naturalWidth,
+      naturalHeight: img.naturalHeight,
+    })
+  }
 
   const submitMutation = useMutation({
     mutationFn: () => submitReview(documentId!, {
@@ -61,7 +81,8 @@ export default function ReviewPage() {
     }))
   }
 
-  const filePreviewUrl = `/uploads/${doc.file_path.split('/uploads/').pop()}`
+  const cleanPath = doc.file_path.replace(/^backend\//, '').replace(/^uploads\//, '')
+  const filePreviewUrl = `/uploads/${cleanPath}`
 
   return (
     <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px' }}>
@@ -78,13 +99,104 @@ export default function ReviewPage() {
 
       <div className="review-layout">
         {/* Left: Document preview */}
-        <div className="review-preview">
+        <div className="review-preview" style={{ position: 'relative' }}>
           {doc.original_filename?.toLowerCase().endsWith('.pdf') || doc.document_type?.toLowerCase().includes('pdf') ? (
             <object data={filePreviewUrl} type="application/pdf" style={{ width: '100%', height: '100%', minHeight: '600px' }}>
               <p style={{ padding: 20, color: 'var(--text-muted)' }}>PDF preview not available. <a href={filePreviewUrl} target="_blank" rel="noreferrer">Open file</a></p>
             </object>
           ) : (
-            <img src={filePreviewUrl} alt="Document preview" style={{ maxWidth: '100%', height: 'auto' }} />
+            <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
+              <img
+                src={filePreviewUrl}
+                alt="Document preview"
+                onLoad={handleImageLoad}
+                style={{ display: 'block', maxWidth: '100%', height: 'auto', borderRadius: '8px' }}
+              />
+              {/* Highlight overlays */}
+              {imgSize.naturalWidth > 0 && imgSize.naturalHeight > 0 && ocrTokens.map((token: any, idx: number) => {
+                const scaleX = imgSize.width / imgSize.naturalWidth
+                const scaleY = imgSize.height / imgSize.naturalHeight
+
+                const left = token.x_min * scaleX
+                const top = token.y_min * scaleY
+                const width = (token.x_max - token.x_min) * scaleX
+                const height = (token.y_max - token.y_min) * scaleY
+
+                // Check matches
+                const isNameMatch = candidate?.name && 
+                  candidate.name.toLowerCase().includes(token.text.toLowerCase()) && 
+                  token.text.length > 2
+
+                let isSubjectMatch = false
+                let isMarkMatch = false
+                let isCurrentHovered = false
+
+                for (const sm of marks) {
+                  const tokenText = token.text.trim().toLowerCase()
+                  const subjRaw = sm.raw_subject_name.trim().toLowerCase()
+                  const subjNorm = sm.normalized_subject.trim().toLowerCase()
+
+                  const matchesSubj = (subjRaw.includes(tokenText) || tokenText.includes(subjRaw) || subjNorm.includes(tokenText)) && tokenText.length > 2
+                  const matchesObtained = sm.raw_obtained_text && (sm.raw_obtained_text.toLowerCase() === tokenText || sm.raw_obtained_text.toLowerCase().replace(/^0+/, '') === tokenText)
+                  const matchesMax = sm.raw_maximum_text && (sm.raw_maximum_text.toLowerCase() === tokenText)
+
+                  if (matchesSubj) {
+                    isSubjectMatch = true
+                    if (hoveredSubjectId === sm.id) {
+                      isCurrentHovered = true
+                    }
+                  }
+                  if (matchesObtained || matchesMax) {
+                    isMarkMatch = true
+                    if (hoveredSubjectId === sm.id) {
+                      isCurrentHovered = true
+                    }
+                  }
+                }
+
+                let bg = 'transparent'
+                let border = '1px solid transparent'
+                let zIndex = 1
+
+                if (isNameMatch) {
+                  bg = hoveredName ? 'rgba(236, 72, 153, 0.35)' : 'rgba(236, 72, 153, 0.15)'
+                  border = hoveredName ? '2px solid rgb(236, 72, 153)' : '1px dashed rgba(236, 72, 153, 0.6)'
+                  zIndex = 10
+                } else if (isCurrentHovered) {
+                  bg = isSubjectMatch ? 'rgba(59, 130, 246, 0.45)' : 'rgba(34, 197, 94, 0.45)'
+                  border = isSubjectMatch ? '2px solid rgb(59, 130, 246)' : '2px solid rgb(34, 197, 94)'
+                  zIndex = 20
+                } else if (isSubjectMatch) {
+                  bg = 'rgba(59, 130, 246, 0.12)'
+                  border = '1px dashed rgba(59, 130, 246, 0.5)'
+                } else if (isMarkMatch) {
+                  bg = 'rgba(34, 197, 94, 0.12)'
+                  border = '1px dashed rgba(34, 197, 94, 0.5)'
+                } else {
+                  return null
+                }
+
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      position: 'absolute',
+                      left: `${left}px`,
+                      top: `${top}px`,
+                      width: `${width}px`,
+                      height: `${height}px`,
+                      backgroundColor: bg,
+                      border: border,
+                      pointerEvents: 'none',
+                      borderRadius: '3px',
+                      zIndex: zIndex,
+                      transition: 'all 0.12s ease-in-out',
+                    }}
+                    title={token.text}
+                  />
+                )
+              })}
+            </div>
           )}
         </div>
 
@@ -119,7 +231,12 @@ export default function ReviewPage() {
           <div className="card">
             <div className="card-title">👤 Candidate</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div className="review-field">
+              <div
+                className="review-field"
+                onMouseEnter={() => setHoveredName(true)}
+                onMouseLeave={() => setHoveredName(false)}
+                style={{ cursor: 'help' }}
+              >
                 <label>Name</label>
                 <div className="value">{candidate?.name || '—'}</div>
               </div>
@@ -139,8 +256,13 @@ export default function ReviewPage() {
                 const corr = corrections[sm.id]
                 const isSuspicious = sm.is_suspicious
                 return (
-                  <div key={sm.id} className={`review-field ${isSuspicious ? 'suspicious' : ''}`}
-                    style={{ background: 'var(--bg-surface)', borderRadius: '10px', padding: '14px' }}>
+                  <div
+                    key={sm.id}
+                    className={`review-field ${isSuspicious ? 'suspicious' : ''}`}
+                    onMouseEnter={() => setHoveredSubjectId(sm.id)}
+                    onMouseLeave={() => setHoveredSubjectId(null)}
+                    style={{ background: 'var(--bg-surface)', borderRadius: '10px', padding: '14px', transition: 'transform 0.15s ease' }}
+                  >
                     <div className="flex items-center gap-2" style={{ marginBottom: '10px' }}>
                       <span style={{ fontWeight: 700, fontSize: '13.5px' }}>{sm.normalized_subject}</span>
                       <span className="text-muted text-sm">({sm.raw_subject_name})</span>

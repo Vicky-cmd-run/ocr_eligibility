@@ -1,9 +1,9 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDropzone } from 'react-dropzone'
 import toast from 'react-hot-toast'
-import { Upload, FileSpreadsheet, Eye, Clock, Trash2, ChevronDown, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Upload, FileSpreadsheet, Eye, Clock, Trash2, ChevronDown, CheckCircle, AlertTriangle, X } from 'lucide-react'
 import {
   createBatch, uploadFiles, getBatch, getBatchProgress,
   getBatchResults, listBatches, exportXlsx
@@ -31,19 +31,23 @@ export default function MainScreen() {
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [approvalMode, setApprovalMode] = useState<'auto' | 'manual'>('auto')
+  const hasInitializedBatchRef = useRef(false)
 
   // Fetch past batches list
-  const { data: batches = [], refetch: refetchBatches } = useQuery({
-    queryKey: ['batches-list'],
+  const { data: batches = [], refetch: refetchBatches } = useQuery<Batch[]>({
+    queryKey: ['batches'],
     queryFn: () => listBatches(0, 100),
   })
 
   // Fetch current batch details
-  const { data: batch } = useQuery({
+  const { data: batch } = useQuery<Batch>({
     queryKey: ['batch', selectedBatchId],
     queryFn: () => getBatch(selectedBatchId!),
     enabled: !!selectedBatchId,
-    refetchInterval: (b) => (b?.state?.data?.status === 'PROCESSING' ? 3000 : false),
+    refetchInterval: (query) => {
+      const b = query.state.data as Batch | undefined
+      return b && (b.status === 'PENDING' || b.status === 'PROCESSING') ? 3000 : false
+    },
   })
 
   // Fetch batch progress
@@ -59,7 +63,10 @@ export default function MainScreen() {
     queryKey: ['batch-results', selectedBatchId],
     queryFn: () => getBatchResults(selectedBatchId!, { skip: 0, limit: 1000 }),
     enabled: !!selectedBatchId,
-    refetchInterval: (r) => (batch?.status === 'PROCESSING' ? 5000 : false),
+    refetchInterval: () => {
+      const b = qc.getQueryData<Batch>(['batch', selectedBatchId])
+      return b && (b.status === 'PENDING' || b.status === 'PROCESSING') ? 3000 : false
+    },
   })
 
   // Save selected batch to localStorage
@@ -71,10 +78,13 @@ export default function MainScreen() {
     }
   }, [selectedBatchId])
 
-  // Select the latest batch automatically if none selected and batches exist
+  // Select the latest batch automatically on initial load if none saved
   useEffect(() => {
-    if (!selectedBatchId && batches.length > 0) {
-      setSelectedBatchId(batches[0].id)
+    if (!hasInitializedBatchRef.current && batches.length > 0) {
+      hasInitializedBatchRef.current = true
+      if (!selectedBatchId) {
+        setSelectedBatchId(batches[0].id)
+      }
     }
   }, [batches, selectedBatchId])
 
@@ -151,6 +161,7 @@ export default function MainScreen() {
                 value={selectedBatchId || ''}
                 onChange={(e) => setSelectedBatchId(e.target.value || null)}
               >
+                <option value="">-- Start Fresh (New Batch) --</option>
                 {batches.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name || `Batch ${b.id.slice(0, 8)}`} ({b.total_documents} files)
@@ -240,6 +251,19 @@ export default function MainScreen() {
                   <FileSpreadsheet size={15} /> Download Excel
                 </a>
               )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedBatchId(null)
+                  localStorage.removeItem('last_batch_id')
+                }}
+                className="btn btn-secondary btn-sm"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', margin: 0 }}
+                title="Close Results Panel"
+              >
+                <X size={15} /> Close
+              </button>
             </div>
           </div>
 
